@@ -1,7 +1,6 @@
-from  lineDetecotr import lineDetecotr
 
 def main():
-    lineDetecotr()
+    print("IMCV")
 
 if __name__ == "__main__":
     main()
