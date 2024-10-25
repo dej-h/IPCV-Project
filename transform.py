@@ -1,6 +1,6 @@
 import numpy as np
 from matplotlib import pyplot as plt
-
+import cv2 as cv2
 def solve_homography(u, v):
     N = u.shape[0]
     H = None
@@ -134,5 +134,8 @@ if __name__ == "__main__":
     v = np.array([[-2, 3], [-3, 4], [2, 5], [11, 1]])
     h = solve_homography(u, v)
     u = np.append(u, np.ones((4, 1)), axis=1)
-    print(np.dot(h, u.T) / np.dot(h, u.T)[-1])
-    
+    img=cv2.imread('tem.jpg')
+    imgTep=cv2.imread('Test.png')
+    new=transform(imgTep,img,np.array([[30,30],[60,30],[60,60],[30,60]]))
+    cv2.imshow('w',new)
+    cv2.waitKey(0)
