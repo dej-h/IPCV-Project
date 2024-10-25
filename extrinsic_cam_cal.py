@@ -48,7 +48,7 @@ def load_camera_parameters(json_path):
     return camera_matrix, dist_coeffs
 
 # Input video file (make sure to adjust the path)
-video_path = "clips/clip1.mp4"
+video_path = "clips/combined.mp4"
 output_video_path = "output_video.mp4"
 json_path = "intrinsic.json"  # Path to your JSON file
 
@@ -195,7 +195,7 @@ while True:
 
     except Exception as e:
         # Handle any exceptions and still show the combined output
-        #print(f"Error: {e}")
+        print(f"Error: {e}")
         cv2.imshow('All Steps Combined (Raw and Merged Lines)', combined_output)
 
     ### 13. Wait for user input or move to the next frame
