@@ -8,6 +8,7 @@ cx = 640   # Principal point x-coordinate (usually image width / 2)
 cy = 360   # Principal point y-coordinate (usually image height / 2)
 
 # Camera intrinsic matrix K
+'''
 K = np.array(
 [
     [1126.00516, 0.0, 1006.32321],
@@ -15,6 +16,14 @@ K = np.array(
     [0.0, 0.0, 1.0]
   ]
     )
+'''
+K=np.array(
+[
+[3081.60369932853 ,0 ,2029.56144828946],
+[0 ,3079.96654929184, 1532.48975330644],
+[0 ,0 ,1 ]
+]
+)
 
 # Invert K
 K_inv = np.linalg.inv(K)
@@ -52,7 +61,11 @@ else:
 
 
 
-img = frame
+# img = frame
+
+img = cv2.imread('ImageTest/IMG_9009.JPG') 
+
+
 if img is None:
     print("Error loading image.")
     exit()
@@ -173,7 +186,7 @@ if len(intersections) >= 2:
     # Draw the line on the image
     img_result = img.copy()
     cv2.line(img_result, pointA, pointB, (0, 255, 0), 2)
-    cv2.putText(img_result, 'Orthogonal Line', pointB, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+    cv2.putText(img_result, 'Orthogonal Line', pointB, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 3)
     cv2.imshow('Result', img_result)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
