@@ -29,7 +29,7 @@ def get_in_cal(frame):
 
     ret, cameraMatrix, distCoeffs, rvecs, tvecs = cv2.calibrateCamera([world_points], [image_points], imageSize, None, None)
 
-    return cameraMatrix, distCoeffs
+    return cameraMatrix, distCoeffs, rvecs, tvecs
 
 
 #helper function, prints the clicked coordinate so i can copy that stuff
@@ -61,12 +61,12 @@ def get_image_points(frame):
     return image_points
 
 if __name__ == "__main__":
-    video_path = "./IPCV-Project/clips/clip1.mp4"
+    video_path = "./clips/clip2.mp4"
     cap = cv2.VideoCapture(video_path)
     
     if not cap.isOpened():
         print("Error: Could not open video.")
-        reader = imageio.get_reader('./IPCV-Project/clips/clip1.mp4')
+        reader = imageio.get_reader('./clips/clip2.mp4')
         frame = reader.get_data(0)
     else:
         ret, frame = cap.read()
@@ -75,7 +75,7 @@ if __name__ == "__main__":
             cap.release()
     
     """ to recalibrate uncomment this :) """
-    #points = get_image_points(frame)
-    #print("Selected Image Points:", points)
+    points = get_image_points(frame)
+    print("Selected Image Points:", points)
 
     print(get_in_cal(frame))
