@@ -8,7 +8,7 @@ cx = 640   # Principal point x-coordinate (usually image width / 2)
 cy = 360   # Principal point y-coordinate (usually image height / 2)
 
 # Camera intrinsic matrix K
-'''
+
 K = np.array(
 [
     [1126.00516, 0.0, 1006.32321],
@@ -24,7 +24,7 @@ K=np.array(
 [0 ,0 ,1 ]
 ]
 )
-
+'''
 # Invert K
 K_inv = np.linalg.inv(K)
 
@@ -61,9 +61,9 @@ else:
 
 
 
-# img = frame
+img = frame
 
-img = cv2.imread('ImageTest/IMG_9009.JPG') 
+#img = cv2.imread('ImageTest/IMG_9009.JPG') 
 
 
 if img is None:
