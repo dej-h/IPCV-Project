@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
-
+import imageio
+import math  
 # Global points list to store selected points
 points = []  # Initialize global points list
 
@@ -46,11 +47,26 @@ def select_point(event, x, y, flags, param):
 
 if __name__ == "__main__":
     # Load image and check if it's loaded successfully
-    image = cv2.imread("ImageTest/IMG_9020.JPG")
-    if image is None:
-        print("Error: Could not load image. Check the file path.")
-        exit()
+    #image = cv2.imread("ImageTest/IMG_9020.JPG")
+    #if image is None:
+     #   print("Error: Could not load image. Check the file path.")
+      #  exit()
 
+    video_path = "clips/clip1.mp4"
+    cap = cv2.VideoCapture(video_path)
+
+    if not cap.isOpened():
+        print("Error: Could not open video.")
+        reader = imageio.get_reader(video_path)
+        frame = reader.get_data(0)
+    else:
+        ret, frame = cap.read()
+        if not ret:
+            print("Error: Could not read frame from video.")
+            cap.release()
+        cap.release()
+
+    image=frame
     # Set up the window and callback for point selection
     cv2.namedWindow("Select Points")
     cv2.setMouseCallback("Select Points", select_point)
@@ -65,9 +81,13 @@ if __name__ == "__main__":
     K1 = np.array([[3081.60369932853, 0, 2029.56144828946],
                    [0, 3079.96654929184, 1532.48975330644],
                    [0, 0, 1]])
-
+    K = np.array([
+    [1126.00516, 0.0, 1006.32321],
+    [0.0, 278.159008, 588.130689],
+    [0.0, 0.0, 1.0]
+    ])
     # Define known 3D points in object space
-    obj_points = np.array([[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]], dtype=np.float32)
+    obj_points = np.array([[0, 0, 0], [100, 0, 0], [100, 100, 0], [0, 100, 0]], dtype=np.float32)
 
     # Use selected 2D image points
     img_points = np.array(points, dtype=np.float32)
@@ -76,7 +96,7 @@ if __name__ == "__main__":
     dist_coeffs = np.zeros((4, 1))
 
     # Estimate the extrinsic parameters (rotation and translation vectors)
-    success, rvec, tvec = cv2.solvePnP(obj_points, img_points, K1, dist_coeffs)
+    success, rvec, tvec = cv2.solvePnP(obj_points, img_points, K, dist_coeffs)
 
     if success:
         # Convert rvec to rotation matrix (optional, for extrinsic matrix)
@@ -90,16 +110,27 @@ if __name__ == "__main__":
     test_3d_point = (0, 0, 0)  # Replace with actual test point
 
     # Use the intrinsic matrix and extrinsic matrix calculated earlier
-    projected_2d_point = project_3d_to_2d(test_3d_point, K1, extrinsic_matrix)
+    projected_2d_point = project_3d_to_2d(test_3d_point, K, extrinsic_matrix)
     print("Projected 2D point:", projected_2d_point)
-    orthognal_3d_point=(0.5,0,-0.5)
-    orthognal_2d_point= project_3d_to_2d(orthognal_3d_point, K1, extrinsic_matrix)
-    print("orthognal_2d_point:", orthognal_2d_point)
-    color = (0, 255, 0)  # Green color
-    thickness = 10
-
+    orthognal_3d_point_45=(0,-70,-70)
+    orthognal_3d_point_30=(0,-100*math.cos(math.radians(30)),-100*math.sin(math.radians(30)))
+    orthognal_3d_point_90=(0,0,-100)
+    orthognal_2d_point_30= project_3d_to_2d(orthognal_3d_point_30, K, extrinsic_matrix)
+    orthognal_2d_point_45= project_3d_to_2d(orthognal_3d_point_45, K, extrinsic_matrix)
+    orthognal_2d_point_90= project_3d_to_2d(orthognal_3d_point_90, K, extrinsic_matrix)
+    print("orthognal_2d_point_30:", orthognal_2d_point_30)
+    print("orthognal_2d_point_45:", orthognal_2d_point_45)
+    print("orthognal_2d_point_90:", orthognal_2d_point_90)
+    color30 = (0, 255, 0)  # Green color
+    thickness = 5
+    color45 = (0, 0, 255)  
+    thickness = 5
+    color90= (255, 0, 0)  
+    thickness = 5
     # Draw the line
-    cv2.line(image, projected_2d_point, orthognal_2d_point, color, thickness)
+    cv2.line(image, projected_2d_point, orthognal_2d_point_30, color30, thickness)
+    cv2.line(image, projected_2d_point, orthognal_2d_point_45, color45, thickness)
+    cv2.line(image, projected_2d_point, orthognal_2d_point_90, color90, thickness)
     cv2.imshow('Orthognal',image)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
