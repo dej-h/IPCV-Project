@@ -1,6 +1,7 @@
 import numpy as np
 from matplotlib import pyplot as plt
 import cv2 as cv2
+
 def solve_homography(u, v):
     N = u.shape[0]
     H = None

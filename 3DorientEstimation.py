@@ -1,194 +1,168 @@
 import cv2
 import numpy as np
 import imageio
-# Replace these with your actual camera intrinsic parameters
-fx = 1000  # Focal length in pixels along x-axis
-fy = 1000  # Focal length in pixels along y-axis
-cx = 640   # Principal point x-coordinate (usually image width / 2)
-cy = 360   # Principal point y-coordinate (usually image height / 2)
+import math  
+from transform import transform
+# Global points list to store selected points
+points = []  # Initialize global points list
 
-# Camera intrinsic matrix K
+import numpy as np
+import cv2
 
-K = np.array(
-[
+def project_3d_to_2d(point_3d, intrinsic_matrix, extrinsic_matrix):
+    # Convert the 3D point to homogeneous coordinates
+    point_3d_homogeneous = np.array([point_3d[0], point_3d[1], point_3d[2], 1]).reshape(4, 1)
+    
+    # Project the 3D point into the camera coordinate system using the extrinsic matrix
+    camera_coordinates = np.dot(extrinsic_matrix, point_3d_homogeneous)  # 3x1 result
+    
+    # Project into the image plane using the intrinsic matrix
+    image_coordinates_homogeneous = np.dot(intrinsic_matrix, camera_coordinates[:3])
+    
+    # Convert homogeneous coordinates to 2D by dividing by the z component
+    x = image_coordinates_homogeneous[0] / image_coordinates_homogeneous[2]
+    y = image_coordinates_homogeneous[1] / image_coordinates_homogeneous[2]
+    
+    return (int(x), int(y))  # Return as pixel coordinates
+
+# Test the function with known 3D points and check if the output 2D points align
+# Example usage (replace with your values):
+
+
+def putBanner(image,banner,cornersIn3D,K,extrinsic_matrix):
+    cornersIn2D=[]
+    for i in cornersIn3D:
+        projected_point = project_3d_to_2d(i, K, extrinsic_matrix)
+        cornersIn2D.append(projected_point)  # Append the point as a tuple or list
+        cv2.circle(image, (projected_point[0], projected_point[1]), 5, (255, 0, 0), -1)
+    cv2.imshow("corners",image)
+    cv2.waitKey(5000)
+    # Convert to a numpy array with shape [4, 2]
+    cornersIn2D = np.array(cornersIn2D, dtype=int)
+    new=transform(banner,image,cornersIn2D)
+    cv2.imshow('w',new)
+    cv2.waitKey(0)
+    cv2.imshow("corners",image)
+    cv2.waitKey(5000)
+    return cornersIn2D
+    
+
+
+
+
+# Define the mouse callback function
+def select_point(event, x, y, flags, param):
+    if event != cv2.EVENT_LBUTTONDOWN:
+        return  # Ignore all other events
+    if event == cv2.EVENT_LBUTTONDOWN and len(points) < 4:
+        points.append((x, y))  # Add the selected point
+        # Draw a small circle at each selected point for visual feedback
+        cv2.circle(image, (x, y), 5, (0, 0, 255), -1)
+        cv2.imshow("Select Points", image)  # Update image with selected point
+        if len(points) == 4:  # Close window when 4 points are selected
+            cv2.destroyAllWindows()
+
+if __name__ == "__main__":
+    # Load image and check if it's loaded successfully
+    #image = cv2.imread("ImageTest/IMG_9020.JPG")
+    #if image is None:
+     #   print("Error: Could not load image. Check the file path.")
+      #  exit()
+
+    video_path = "clips/clip1.mp4"
+    cap = cv2.VideoCapture(video_path)
+    banner=cv2.imread('banner.png')
+    if not cap.isOpened():
+        print("Error: Could not open video.")
+        reader = imageio.get_reader(video_path)
+        frame = reader.get_data(0)
+    else:
+        ret, frame = cap.read()
+        if not ret:
+            print("Error: Could not read frame from video.")
+            cap.release()
+        cap.release()
+
+    image=frame
+    # Set up the window and callback for point selection
+    cv2.namedWindow("Select Points")
+    cv2.setMouseCallback("Select Points", select_point)
+
+    # Keep the window open until 4 points are selected
+    while len(points) < 4:
+        cv2.imshow("Select Points", image)
+        cv2.waitKey(1)
+    print("Selected points:", points)
+    #  camera intrinsic matrix 
+
+    K = np.array([
     [1126.00516, 0.0, 1006.32321],
     [0.0, 278.159008, 588.130689],
     [0.0, 0.0, 1.0]
-  ]
+    ])
+    # Define known 3D points in object space
+    obj_points = np.array([[0, 0, 0], [100, 0, 0], [100, 100, 0], [0, 100, 0]], dtype=np.float32)
+
+    # Use selected 2D image points
+    img_points = np.array(points, dtype=np.float32)
+
+    # Define distortion coefficients (if available, otherwise use zeros)
+    dist_coeffs = np.zeros((4, 1))
+
+    # Estimate the extrinsic parameters (rotation and translation vectors)
+    success, rvec, tvec = cv2.solvePnP(obj_points, img_points, K, dist_coeffs)
+
+    if success:
+        # Convert rvec to rotation matrix (optional, for extrinsic matrix)
+        rotation_matrix, _ = cv2.Rodrigues(rvec)
+        print("Extrinsic rvec:\n", rvec)
+        extrinsic_matrix = np.hstack((rotation_matrix, tvec))
+        print("Extrinsic Matrix:\n", extrinsic_matrix)
+    else:
+        print("Error: solvePnP failed to find a solution.")
+    
+    cornersBanner3D=np.array(
+        [
+            [0,0,0],
+            [0,0,-20],
+            [50,0,-20],
+            [50,0,0]
+        ]
     )
-'''
-K=np.array(
-[
-[3081.60369932853 ,0 ,2029.56144828946],
-[0 ,3079.96654929184, 1532.48975330644],
-[0 ,0 ,1 ]
-]
-)
-'''
-# Invert K
-K_inv = np.linalg.inv(K)
+    
+    cornersBanner2D=putBanner(image,banner,cornersBanner3D,K,extrinsic_matrix)
 
-# Global variables to store points
-points = []
-lines = []
+    
+        
+    print(cornersBanner2D)
+    '''
+    # Define a 3D point in world coordinates
+    test_3d_point = (0, 0, 0)  # Replace with actual test point
 
-def click_event(event, x, y, flags, param):
-    global points, lines, img_display
-    if event == cv2.EVENT_LBUTTONDOWN:
-        cv2.circle(img_display, (x, y), 5, (0, 0, 255), -1)
-        points.append((x, y))
-        if len(points) % 2 == 0:
-            # We have two points, store the line
-            cv2.line(img_display, points[-2], points[-1], (255, 0, 0), 2)
-            lines.append((points[-2], points[-1]))
-            cv2.putText(img_display, f'Line {len(lines)}', points[-1], cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
-        cv2.imshow('Image', img_display)
-
-# Load the image
-
-video_path = "clips/clip1.mp4"
-cap = cv2.VideoCapture(video_path)
-
-if not cap.isOpened():
-    print("Error: Could not open video.")
-    reader = imageio.get_reader('./IPCV-Project/clips/clip1.mp4')
-    frame = reader.get_data(0)
-else:
-    ret, frame = cap.read()
-    if not ret:
-        print("Error: Could not read frame from video.")
-        cap.release()
-
-
-
-img = frame
-
-#img = cv2.imread('ImageTest/IMG_9009.JPG') 
-
-
-if img is None:
-    print("Error loading image.")
-    exit()
-
-img_display = img.copy()
-
-cv2.namedWindow('Image')
-cv2.setMouseCallback('Image', click_event)
-
-print("Please click two points for Line 1, then two points for Line 2.")
-
-while True:
-    cv2.imshow('Image', img_display)
-    key = cv2.waitKey(1) & 0xFF
-    if key == 27 or len(lines) == 2:  # Esc key to exit, or when two lines are selected
-        break
-
-cv2.destroyAllWindows()
-
-if len(lines) < 2:
-    print("Not enough lines selected.")
-    exit()
-
-# Proceed with the computation
-# Function to convert image points to camera coordinates
-def image_to_camera(p):
-    p_image = np.array([p[0], p[1], 1])
-    p_cam = np.dot(K_inv, p_image)
-    return p_cam
-
-# For Line 1
-p1_line1 = lines[0][0]  # First point of Line 1
-p2_line1 = lines[0][1]  # Second point of Line 1
-
-p1_cam_line1 = image_to_camera(p1_line1)
-p2_cam_line1 = image_to_camera(p2_line1)
-
-d1_cam = p2_cam_line1 - p1_cam_line1  # Direction vector in camera coordinates
-
-# For Line 2
-p1_line2 = lines[1][0]
-p2_line2 = lines[1][1]
-
-p1_cam_line2 = image_to_camera(p1_line2)
-p2_cam_line2 = image_to_camera(p2_line2)
-
-d2_cam = p2_cam_line2 - p1_cam_line2  # Direction vector in camera coordinates
-
-# Compute the orthogonal direction
-d3_cam = np.cross(d1_cam, d2_cam)
-
-# Check for zero vector (lines are parallel or invalid)
-if np.linalg.norm(d3_cam) == 0:
-    print("The computed orthogonal direction is zero. Check if the lines are valid and not parallel.")
-    exit()
-
-# Project this direction back onto the image plane to get the vanishing point
-v3 = np.dot(K, d3_cam)
-
-# Normalize to get image coordinates
-v3 = v3 / v3[2]
-
-# Now, define the line in homogeneous coordinates passing through a point and the vanishing point
-# Using the first point of Line 1 for reference
-p1_image = np.array([p1_line1[0], p1_line1[1], 1])
-v3_image = v3
-
-line3 = np.cross(p1_image, v3_image)
-
-# Now, find two points along line3 within the image boundaries
-height, width, _ = img.shape
-
-def compute_line_intersections(line, width, height):
-    intersections = []
-
-    # Line equation: a*x + b*y + c = 0
-    a, b, c = line
-
-    # Avoid division by zero
-    epsilon = 1e-10
-
-    # Left border x = 0
-    x = 0
-    if abs(b) > epsilon:
-        y = - (a * x + c) / b
-        if 0 <= y <= height - 1:
-            intersections.append((int(x), int(y)))
-
-    # Right border x = width -1
-    x = width - 1
-    if abs(b) > epsilon:
-        y = - (a * x + c) / b
-        if 0 <= y <= height - 1:
-            intersections.append((int(x), int(y)))
-
-    # Top border y = 0
-    y = 0
-    if abs(a) > epsilon:
-        x = - (b * y + c) / a
-        if 0 <= x <= width - 1:
-            intersections.append((int(x), int(y)))
-
-    # Bottom border y = height -1
-    y = height - 1
-    if abs(a) > epsilon:
-        x = - (b * y + c) / a
-        if 0 <= x <= width -1:
-            intersections.append((int(x), int(y)))
-
-    return intersections
-
-intersections = compute_line_intersections(line3, width, height)
-
-if len(intersections) >= 2:
-    pointA = intersections[0]
-    pointB = intersections[1]
-
-    # Draw the line on the image
-    img_result = img.copy()
-    cv2.line(img_result, pointA, pointB, (0, 255, 0), 2)
-    cv2.putText(img_result, 'Orthogonal Line', pointB, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 3)
-    cv2.imshow('Result', img_result)
+    # Use the intrinsic matrix and extrinsic matrix calculated earlier
+    projected_2d_point = project_3d_to_2d(test_3d_point, K, extrinsic_matrix)
+    print("Projected 2D point:", projected_2d_point)
+    orthognal_3d_point_45=(0,-70,-70)
+    orthognal_3d_point_30=(0,-100*math.cos(math.radians(30)),-100*math.sin(math.radians(30)))
+    orthognal_3d_point_90=(0,0,-100)
+    orthognal_2d_point_30= project_3d_to_2d(orthognal_3d_point_30, K, extrinsic_matrix)
+    orthognal_2d_point_45= project_3d_to_2d(orthognal_3d_point_45, K, extrinsic_matrix)
+    orthognal_2d_point_90= project_3d_to_2d(orthognal_3d_point_90, K, extrinsic_matrix)
+    print("orthognal_2d_point_30:", orthognal_2d_point_30)
+    print("orthognal_2d_point_45:", orthognal_2d_point_45)
+    print("orthognal_2d_point_90:", orthognal_2d_point_90)
+    color30 = (0, 255, 0)  # Green color
+    thickness = 5
+    color45 = (0, 0, 255)  
+    thickness = 5
+    color90= (255, 0, 0)  
+    thickness = 5
+    # Draw the line
+    
+    cv2.line(image, projected_2d_point, orthognal_2d_point_30, color30, thickness)
+    cv2.line(image, projected_2d_point, orthognal_2d_point_45, color45, thickness)
+    cv2.line(image, projected_2d_point, orthognal_2d_point_90, color90, thickness)
+    cv2.imshow('Orthognal',image)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
-else:
-    print("Could not find enough intersections to draw the line.")
+    '''
