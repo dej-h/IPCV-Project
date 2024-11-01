@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import imageio
-import math  
+import math  as math
 from transform import transform
 # Global points list to store selected points
 points = []  # Initialize global points list
@@ -29,18 +29,30 @@ def project_3d_to_2d(point_3d, intrinsic_matrix, extrinsic_matrix):
 # Example usage (replace with your values):
 
 
-def putBanner(image,banner,cornersIn3D,K,extrinsic_matrix):
+def putBanner(image,bannerdegree,K,extrinsic_matrix):
+
+    cornersBanner3D=np.array(
+        [
+            [0,0,0],
+            [0,-20* math.cos(math.radians(bannerdegree)),-20* math.sin(math.radians(bannerdegree))],
+            [50,-20* math.cos(math.radians(bannerdegree)),-20* math.sin(math.radians(bannerdegree))],
+            [50,0,0]
+        ]
+    )
     cornersIn2D=[]
-    for i in cornersIn3D:
+    for i in cornersBanner3D:
+        print(i)
         projected_point = project_3d_to_2d(i, K, extrinsic_matrix)
+        print(projected_point)
         cornersIn2D.append(projected_point)  # Append the point as a tuple or list
         cv2.circle(image, (projected_point[0], projected_point[1]), 5, (255, 0, 0), -1)
+        
     cv2.imshow("corners",image)
     cv2.waitKey(5000)
     # Convert to a numpy array with shape [4, 2]
     cornersIn2D = np.array(cornersIn2D, dtype=int)
     new=transform(banner,image,cornersIn2D)
-    cv2.imshow('w',new)
+    cv2.imshow('Banner',new)
     cv2.waitKey(0)
     cv2.imshow("corners",image)
     cv2.waitKey(5000)
@@ -121,20 +133,13 @@ if __name__ == "__main__":
     else:
         print("Error: solvePnP failed to find a solution.")
     
-    cornersBanner3D=np.array(
-        [
-            [0,0,0],
-            [0,0,-20],
-            [50,0,-20],
-            [50,0,0]
-        ]
-    )
+
     
-    cornersBanner2D=putBanner(image,banner,cornersBanner3D,K,extrinsic_matrix)
+    cornersBanner2D=putBanner(image,0,K,extrinsic_matrix)
 
     
         
-    print(cornersBanner2D)
+    #print(cornersBanner2D)
     '''
     # Define a 3D point in world coordinates
     test_3d_point = (0, 0, 0)  # Replace with actual test point
