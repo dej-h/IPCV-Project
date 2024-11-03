@@ -23,8 +23,27 @@ def dis_to_line(line, point):
     # Calculate and return the distance
     return np.sqrt((px - closest_point[0]) ** 2 + (py - closest_point[1]) ** 2)
 
+def average_distance_between_lines(line1, line2):
+    """Calculate the average distance between two line segments."""
+    # Get endpoints of the two lines
+    x1, y1 = line1['p1']
+    x2, y2 = line1['p2']
+    x3, y3 = line2['p1']
+    x4, y4 = line2['p2']
+    
+    # Calculate distances from each endpoint of line1 to line2
+    d1 = dis_to_line((x3, y3, x4, y4), (x1, y1))
+    d2 = dis_to_line((x3, y3, x4, y4), (x2, y2))
+    
+    # Calculate distances from each endpoint of line2 to line1
+    d3 = dis_to_line((x1, y1, x2, y2), (x3, y3))
+    d4 = dis_to_line((x1, y1, x2, y2), (x4, y4))
+    
+    # Return the average of these distances
+    return (d1 + d2 + d3 + d4) / 4
+
 def should_merge(basis_line, merged_line, angle_threshold, dis_threshold):
-    """Determine if two lines should be merged based on their angles and distance."""
+    """Determine if two lines should be merged based on their angles and average distance."""
     delta_angle = min(
         abs((basis_line['angles'][0] - merged_line['angles'][0]) % 360),
         abs((basis_line['angles'][1] - merged_line['angles'][0]) % 360),
@@ -33,11 +52,9 @@ def should_merge(basis_line, merged_line, angle_threshold, dis_threshold):
     )
 
     if delta_angle < angle_threshold:
-        dis_p1 = dis_to_line((basis_line['p1'][0], basis_line['p1'][1], basis_line['p2'][0], basis_line['p2'][1]), merged_line['p1'])
-        dis_p2 = dis_to_line((basis_line['p1'][0], basis_line['p1'][1], basis_line['p2'][0], basis_line['p2'][1]), merged_line['p2'])
-
-        if dis_p1 < dis_threshold or dis_p2 < dis_threshold:
-            return True    
+        avg_distance = average_distance_between_lines(basis_line, merged_line)
+        if avg_distance < dis_threshold:
+            return True
     return False
 
 def fit_line(points):
