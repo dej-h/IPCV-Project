@@ -1,6 +1,6 @@
 import numpy as np
 import cv2
-from line_detection import get_intersection_points
+
 
 def draw_lines(image, ref_points, ad_img, debug_mode=False):
     # Ensure all ref_points are NumPy arrays
@@ -31,7 +31,7 @@ def draw_lines(image, ref_points, ad_img, debug_mode=False):
 
     # Define the length for the extended points
     line_length = 40
-    print(direction_vector1, direction_vector2)
+    #print(direction_vector1, direction_vector2)
 
     # Extend lines from original points and new upper points
     extended_points = [
@@ -53,6 +53,14 @@ def draw_lines(image, ref_points, ad_img, debug_mode=False):
 
     # Prepare to overlay the ad image on the plane
     ad_height, ad_width = ad_img.shape[:2]
+    # flip the image if the is sideways
+    if ad_height > ad_width:
+        ad_img = cv2.rotate(ad_img, cv2.ROTATE_90_CLOCKWISE)
+        ad_height, ad_width = ad_img.shape[:2]
+        
+    # flip the banner as it is upside down
+    ad_img = cv2.flip(ad_img, 0)
+        
     src_pts = np.array([[0, ad_height], [ad_width, ad_height], [ad_width, 0], [0, 0]], dtype=np.float32)
     dst_pts = np.array(plane_points, dtype=np.float32)
     matrix = cv2.getPerspectiveTransform(src_pts, dst_pts)
@@ -68,7 +76,7 @@ def draw_lines(image, ref_points, ad_img, debug_mode=False):
     
     return image, all_points  # Return all points as integers
 
-def track_corners(intersection_points, ref_points, max_distance=40):
+def track_corners(intersection_points, ref_points, max_distance=150):
     frame_tracked_points = []
 
     for prev_point in ref_points:
@@ -83,7 +91,7 @@ def track_corners(intersection_points, ref_points, max_distance=40):
 
 if __name__ == "__main__":
     video_path = "./clips/clip2.mp4"
-    img_path = "./ad.png"
+    img_path = "ad.png"
     ref_points = [np.array([1195, 272]), np.array([915, 189]), np.array([512, 330]), np.array([267, 235])]
     cap = cv2.VideoCapture(video_path)
     ad_img = cv2.imread(img_path)
