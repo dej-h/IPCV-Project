@@ -1,6 +1,7 @@
 import numpy as np
 from matplotlib import pyplot as plt
 import cv2 as cv2
+from scipy.ndimage import map_coordinates
 
 def solve_homography(u, v):
     N = u.shape[0]
@@ -30,7 +31,7 @@ def solve_homography(u, v):
     return H
 
 def warping(src, dst, H, ymin, ymax, xmin, xmax, direction='b'):
-
+    print("warping start")
     h_src, w_src, ch = src.shape
     h_dst, w_dst, ch = dst.shape
 
@@ -41,6 +42,7 @@ def warping(src, dst, H, ymin, ymax, xmin, xmax, direction='b'):
     # TODO: 1.meshgrid the (x,y) coordinate pairs
 
     if direction == 'b':
+        print("backward")
         H_inv = np.linalg.inv(H)
         DX, DY = np.meshgrid(np.arange(xmin, xmax, 1), np.arange(ymin, ymax, 1))
 
@@ -65,6 +67,7 @@ def warping(src, dst, H, ymin, ymax, xmin, xmax, direction='b'):
         dst[reimagemap[1, :], reimagemap[0, :], :] = modsrc
 
     elif direction == 'f':
+        print("forward")
         src_Area = np.linalg.norm(
             np.cross(src_point[0:2, 1] - src_point[0:2, 0], src_point[0:2, 2] - src_point[0:2, 0]))
 
@@ -76,48 +79,33 @@ def warping(src, dst, H, ymin, ymax, xmin, xmax, direction='b'):
             step_inter = 0.8
         else:
             step_inter = src_Area / des_Area * 0.7
-
+        print("Starting meshgrid")
         SX, SY = np.meshgrid(np.arange(xmin, xmax, step_inter), np.arange(ymin, ymax, step_inter))
         SX = SX.flatten()
         SY = SY.flatten()
 
         imagemap = np.stack((SX, SY, np.ones(SX.shape)), axis=0)
-
+        print("meshgrid done")
         modsrc = bilinear_interpolation(src, imagemap)
-
+        print("bilinear done")
         newimagemap = np.dot(H, imagemap) / np.dot(H, imagemap)[-1, :]
 
         newimagemap = np.rint(newimagemap).astype(int)
         newimagemap = np.delete(newimagemap, -1, axis=0)
 
         dst[newimagemap[1, :], newimagemap[0, :], :] = modsrc
-
+    print("warping done")
     return dst
 
 def bilinear_interpolation(img, cod):
-    x = np.array(cod[0, :])
-    y = np.array(cod[1, :])
+    # Prepare the coordinates as a 2D array for interpolation
+    coords = np.vstack((cod[1], cod[0]))  # y-axis first, x-axis second for scipy's map_coordinates
 
-    x0 = np.floor(x).astype(int)
-    x1 = x0 + 1
-    y0 = np.floor(y).astype(int)
-    y1 = y0 + 1
-
-    x0 = np.clip(x0, 0, img.shape[1] - 1)
-    x1 = np.clip(x1, 0, img.shape[1] - 1)
-    y0 = np.clip(y0, 0, img.shape[0] - 1)
-    y1 = np.clip(y1, 0, img.shape[0] - 1)
-
-    I00 = img[y0, x0, :]
-    I01 = img[y1, x0, :]
-    I10 = img[y0, x1, :]
-    I11 = img[y1, x1, :]
-    w00 = (x1 - x) * (y1 - y)
-    w01 = (x1 - x) * (y - y0)
-    w10 = (x - x0) * (y1 - y)
-    w11 = (x - x0) * (y - y0)
-
-    return (I00.T * w00).T + (I01.T * w01).T + (I10.T * w10).T + (I11.T * w11).T
+    # Interpolate for each color channel and stack the result
+    result = np.stack([map_coordinates(img[..., channel], coords, order=1, mode='nearest') 
+                       for channel in range(img.shape[2])], axis=-1)
+    
+    return result
 
 
 def transform(img, canvas, corners):
@@ -128,7 +116,7 @@ def transform(img, canvas, corners):
                 [0, h]
                 ])
     H = solve_homography(x, corners)
-    
+    print("solved homo")
     return  warping(img, canvas, H, 0, h, 0, w, direction='f')
 if __name__ == "__main__":
     u = np.array([[2, 3], [3, 4], [5, 5], [1, 1]])

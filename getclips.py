@@ -24,7 +24,7 @@ clip_times = [
     (32, 42),  # Clip 1 from 10s to 20s
     (67, 77),  # Clip 2 from 30s to 40s
     (150, 160),  # Clip 3 from 50s to 60s
-    (260, 290)   # Clip 4 from 70s to 80s
+    (260, 266.5)   # Clip 4 from 70s to 80s
 ]
 
 extract_clips(input_mp4, output_files, clip_times)

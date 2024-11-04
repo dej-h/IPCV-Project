@@ -1,16 +1,16 @@
 import numpy as np
 import cv2
-
+from point_detection import order_points
 
 def draw_lines(image, ref_points, ad_img, debug_mode=False):
     # Ensure all ref_points are NumPy arrays
     ref_points = [np.array(point) for point in ref_points]
 
     # Define the original front points
-    point1 = ref_points[0][:2]
-    point2 = ref_points[1][:2]
-    selected_point1 = ref_points[2][:2]
-    selected_point2 = ref_points[3][:2]
+    point1 = ref_points[2][:2]
+    point2 = ref_points[0][:2]
+    selected_point1 = ref_points[3][:2]
+    selected_point2 = ref_points[1][:2]
 
     # Calculate the offset for the new upper points
     offset = 30                                        
@@ -76,18 +76,47 @@ def draw_lines(image, ref_points, ad_img, debug_mode=False):
     
     return image, all_points  # Return all points as integers
 
-def track_corners(intersection_points, ref_points, max_distance=150):
+def track_corners(intersection_points, ref_points, max_distance=50):
     frame_tracked_points = []
+    new_point_counter = 0
+    used_points = set()  # Keep track of intersection points that have been used
 
     for prev_point in ref_points:
+        # Find points within max_distance from the current reference point
         possible_points = [
             pt for pt in intersection_points
             if np.linalg.norm(np.array(prev_point) - np.array(pt)) <= max_distance
         ]
-        new_point = min(possible_points, key=lambda pt: np.linalg.norm(np.array(prev_point) - np.array(pt))) if possible_points else prev_point
+        
+        # Select the closest point within the distance, else keep the previous point
+        if possible_points:
+            new_point = min(possible_points, key=lambda pt: np.linalg.norm(np.array(prev_point) - np.array(pt)))
+            used_points.add(tuple(new_point))  # Mark this intersection point as used
+        else:
+            new_point = prev_point  # No update if no points within max_distance
+
+        # Increment the counter if the point has changed from the previous
+        if not np.array_equal(new_point, prev_point):
+            new_point_counter += 1
+
         frame_tracked_points.append(new_point)
 
-    return frame_tracked_points
+    # If exactly 3 points were successfully updated, set the 4th to the unused intersection point
+    if new_point_counter == 3:
+        # Find the remaining intersection point that hasn’t been used
+        unused_points = [pt for pt in intersection_points if tuple(pt) not in used_points]
+        if unused_points:
+            # Update the fourth point to this unused intersection point
+            for i, (point, prev_point) in enumerate(zip(frame_tracked_points, ref_points)):
+                if np.array_equal(point, prev_point):  # Find the unmatched reference point
+                    frame_tracked_points[i] = unused_points[0]  # Assign the unused intersection point
+                    break
+    
+    # Return True if all points have been updated (4 points updated), else False
+    if new_point_counter < 3:
+        return False, frame_tracked_points
+    else:
+        return True, frame_tracked_points
 
 if __name__ == "__main__":
     video_path = "./clips/clip2.mp4"

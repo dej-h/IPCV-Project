@@ -3,24 +3,36 @@ import numpy as np
 import time
 from line_detection import merge_lines, intersection   # Import your provided functions
 from banner_placement import draw_lines, track_corners
-from point_detection import get_top_middle_points, merge_close_intersections, load_camera_parameters, video_player, order_points
-
+from point_detection import get_top_middle_points, merge_close_intersections, load_camera_parameters, video_player, order_points, smooth_points_exp, get_initial_points
+from Dorient3Estimation import putBanner
 # Input video file (make sure to adjust the path)
-video_path = "clips/clip1.mp4"
+video_path = "clips/clip4.mp4"
 banner_path = "banner.png"
-output_video_path_points = "output_video_points.mp4"
-output_video_path = "output_video.mp4"
+output_video_path_points = "outputs/clip4_points.mp4"
+output_video_path = "outputs/clip4_output.mp4"
 json_path = "CamCalParam.json"  # Path to your JSON file
 
+# drawing options
+line_thickness = 3
+point_radius = 5
+# Downsample frame dimensions (for better line detection performance and results)
+downsampled_width = 640
+downsampled_height = 360
+
 # ref points for the first frame
-ref_points = [np.array([1195, 272]), np.array([915, 189]), np.array([512, 330]), np.array([267, 235])]
+ref_points = [np.array([1195, 272]), np.array([915, 189]), np.array([950, 320]), np.array([700, 180])]
 prev_points = ref_points
 banner_img = cv2.imread(banner_path)
+smoothed_display_points = None
 # Load camera parameters from JSON
 camera_matrix, dist_coeffs = load_camera_parameters(json_path)
 
-# Open the video file
+# Get initial points by averaging over the first few frames
 cap = cv2.VideoCapture(video_path)
+ref_points = get_initial_points(cap, downsampled_width,downsampled_height, num_initial_frames=10)
+
+ 
+cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # Reset the video to the start after initializing
 
 # Check if the video opened successfully
 if not cap.isOpened():
@@ -37,21 +49,25 @@ fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Codec for .mp4 format
 out_points = cv2.VideoWriter(output_video_path_points, fourcc, fps, (frame_width, frame_height))
 out = cv2.VideoWriter(output_video_path, fourcc, fps, (frame_width, frame_height))
 
+#scale the ref points by the downsampled ratio
+horizontal_ratio = frame_width / downsampled_width
+vertical_ratio = frame_height / downsampled_height
+ref_points = [(int(point[0] * horizontal_ratio), int(point[1] * vertical_ratio)) for point in ref_points]
+
 # amout of frames
 total_frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 frame_count = 0
 combined_output_array = []
 banner_placement_array = []
 
-# drawing options
-line_thickness = 3
-point_radius = 5
-# Downsample frame dimensions (for better line detection performance and results)
-downsampled_width = 640
-downsampled_height = 360
 
+
+# banner placement variables
 debug_mode = False
-
+intial_distance = 50
+current_distance = intial_distance
+distance_step = 5
+first_time = True
 # Process each frame
 while True:
     frame_count += 1
@@ -171,32 +187,79 @@ while True:
         combined_output_array.append(combined_output)
         
         # Write the processed frame to the output video
+        # put frame in correct dimension
+        combined_output = cv2.resize(combined_output, (frame_width, frame_height))
         out_points.write(combined_output)
     
-        # Virtual banner placement
+        # Virtual banner placement 
         # translate the top right points to the original image size
         horizontal_ratio = frame_width / downsampled_width
         vertical_ratio = frame_height / downsampled_height
         
+        # if first_time and top_right_points != None:
+        #     first_time = False
+        #     ref_points = top_right_points
+        
         if top_right_points == None:
             top_right_points = prev_points
-            
-        top_right_points = [(int(point[0] * horizontal_ratio), int(point[1] * vertical_ratio)) for point in top_right_points]
         
+        
+        # Approach 2
+        top_right_points = [(int(point[0] * horizontal_ratio), int(point[1] * vertical_ratio)) for point in top_right_points]
+
         top_right_points = order_points(top_right_points)
-        ref_points = track_corners(top_right_points, ref_points)
-        image, all_points = draw_lines(img_og, ref_points, banner_img, debug_mode)
-        # draw the top right points on the original image
-        for point in top_right_points:
-            cv2.circle(image, point, point_radius, (0, 255, 0), -1)
-            
+        found_corners, ref_points = track_corners(top_right_points, ref_points, max_distance=current_distance)
+        if not found_corners:
+            current_distance += distance_step
+        else:
+            current_distance = intial_distance
+
+        # Smooth only for display purposes
+        smoothed_display_points = smooth_points_exp(ref_points,smoothed_display_points)
+
+        # Draw the lines and circles using smoothed display points
+        image, all_points = draw_lines(img_og, smoothed_display_points, banner_img, debug_mode)
+
+        # # Draw the top right points on the original image
+        # for point in top_right_points:
+        #     cv2.circle(image, point, point_radius, (0, 255, 0), -1)
+
+        # Draw the smoothed display points as the reference points on the image
+        # for point in smoothed_display_points:
+        #     cv2.circle(image, tuple(point), point_radius, (0, 0, 255), -1)
+
         banner_placement_array.append(image)
         out.write(image)
+
+        
+        ## Approach 1
+        # angle = 30
+        # # restructure the top right points from top right -> bottom right -> bottom left -> top left
+        # # Convert the points to a numpy array if they aren't already
+        # top_right_points = [(int(point[0] * horizontal_ratio), int(point[1] * vertical_ratio)) for point in top_right_points]
+        # top_right_points = np.array(top_right_points, dtype=np.float32)
+
+        # # Sort points by y-coordinate to separate top and bottom points
+        # top_right_points = sorted(top_right_points, key=lambda pt: pt[1])
+
+        # # Split points into top and bottom based on sorted y-coordinates
+        # top_points = sorted(top_right_points[:2], key=lambda pt: pt[0], reverse=True)  # Sort by x (right -> left)
+        # bottom_points = sorted(top_right_points[2:], key=lambda pt: pt[0], reverse=True)  # Sort by x (right -> left)
+
+        # # Arrange points in the specified order: top right, bottom right, bottom left, top left
+        # ordered_points = np.array([top_points[0], bottom_points[0], bottom_points[1], top_points[1]])
+        # print("Going into banner placement")
+        # _,image = putBanner(img_og,ordered_points,angle,banner_img)
+        # print("Coming out of banner placement")
+        # banner_placement_array.append(image)
+        # out.write(image)
         
     except Exception as e:
         # Handle any exceptions and still show the combined output
         print(f"Error: {e}")
         # throw the error higher
+        raise e
+        
         
         
         #cv2.imshow('All Steps Combined (Raw and Merged Lines)', combined_output)
@@ -216,10 +279,10 @@ cap.release()
 out_points.release()
 
 # video player banner placement
-video_player(banner_placement_array)
+video_player(banner_placement_array,fps=fps)
 
 # video player point detection
-video_player(combined_output_array)
+video_player(combined_output_array,fps=fps)
 
 
 

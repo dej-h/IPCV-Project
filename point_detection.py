@@ -5,6 +5,100 @@ import time
 from line_detection import dis_to_line, should_merge, merge_lines, intersection  # Import your provided functions
 import itertools
 
+def get_initial_points(cap, downsampled_width, downsampled_height, num_initial_frames=60, max_distance=50):
+    """
+    Determine initial reference points by averaging detected points over the first few frames.
+    """
+    initial_points = []
+    for _ in range(num_initial_frames):
+        ret, frame = cap.read()
+        if not ret:
+            break  # Break if there are no more frames
+
+        # Process the frame to detect lines and intersection points (using your existing functions)
+        img_resized = cv2.resize(frame, (downsampled_width, downsampled_height))
+        hsv = cv2.cvtColor(img_resized, cv2.COLOR_BGR2HSV)
+        lower_green = np.array([40, 40, 40])
+        upper_green = np.array([60, 255, 255])
+        binary_mask = cv2.inRange(hsv, lower_green, upper_green)
+        contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        large_contour_mask = np.zeros_like(binary_mask)
+        min_area = 500
+        for contour in contours:
+            if cv2.contourArea(contour) > min_area:
+                cv2.drawContours(large_contour_mask, [contour], -1, (255), thickness=cv2.FILLED)
+        gray = cv2.cvtColor(img_resized, cv2.COLOR_BGR2GRAY)
+        filtered_gray = cv2.bitwise_and(gray, gray, mask=large_contour_mask)
+        edges = cv2.Canny(filtered_gray, 20, 180)
+        rho = 1
+        theta = np.pi / 180
+        threshold = 80
+        minLineLength = 140
+        maxLineGap = 100
+        ### 5. Create an image to draw the raw Hough lines (before merging)
+        lines = cv2.HoughLinesP(edges, rho, theta, threshold, minLineLength=minLineLength, maxLineGap=maxLineGap)
+
+        ### 6. Merge lines based on angle and distance thresholds
+        detected_lines = []
+        if lines is not None:
+            for line in lines:
+                x1, y1, x2, y2 = line[0]
+                angle1 = np.arctan2(y2 - y1, x2 - x1) * 180 / np.pi
+                angle2 = (angle1 + 180) % 360  # Add 180 degrees for the opposite angle
+                detected_lines.append({
+                    'p1': (x1, y1),
+                    'p2': (x2, y2),
+                    'angles': (angle1, angle2)
+                })
+        merged_lines = merge_lines(detected_lines, angle_threshold=10, dis_threshold=20)
+
+        ### 7. Create an image to draw the merged lines and intersection points
+        lines_img = np.zeros_like(img_resized)
+
+        intersection_points = []  # To store intersection points
+        # Find intersections
+        for i in range(len(merged_lines)):
+            for j in range(i + 1, len(merged_lines)):
+                point = intersection(merged_lines[i], merged_lines[j])
+                if point is not None:
+                    intersection_points.append(point)
+
+        # Merge close intersection points
+        intersection_points = merge_close_intersections(intersection_points, distance_threshold=20)
+        
+        
+        # Get top-right 4 points
+        top_right_points = get_top_middle_points(intersection_points, contours, img_resized,merged_lines, num_points=4, frame_width=downsampled_width, frame_height=downsampled_height)
+        if top_right_points is not None:
+            top_right_points = order_points(top_right_points)
+        if top_right_points is not None:
+                initial_points.append(top_right_points)
+
+    # Average out the points from all initial frames
+    avg_points = np.mean([np.array(pts) for pts in initial_points], axis=0).astype(int)
+    return [tuple(pt) for pt in avg_points]
+
+def smooth_points_exp(ref_points, smoothed_display_points, ALPHA = 0.6):
+    
+
+    # Initialize smoothed display points if they are None
+    if smoothed_display_points is None:
+        smoothed_display_points = ref_points.copy()
+
+    # Apply exponential smoothing
+    new_smoothed_points = []
+    for i, (x, y) in enumerate(ref_points):
+        # Smooth each point based on the previous smoothed point
+        smoothed_x = int(ALPHA * x + (1 - ALPHA) * smoothed_display_points[i][0])
+        smoothed_y = int(ALPHA * y + (1 - ALPHA) * smoothed_display_points[i][1])
+        
+        # Update the smoothed display point for this corner
+        new_smoothed_points.append((smoothed_x, smoothed_y))
+
+    # Update the global smoothed points for the next frame
+    smoothed_display_points = new_smoothed_points
+    return smoothed_display_points
+
 def order_points(points):
     # Sort points by y-coordinate (ascending), breaking ties by x-coordinate
     sorted_points = sorted(points, key=lambda p: (p[1], p[0]))
@@ -25,7 +119,7 @@ def order_points(points):
 
     return [np.array(point1), np.array(point2), np.array(selected_point1), np.array(selected_point2)]
 
-def video_player(frame_array):
+def video_player(frame_array,debug = False, fps = 60):
     """
     Video player to display frames with controls.
     
@@ -39,8 +133,11 @@ def video_player(frame_array):
         - 'b': Move backward one frame
     """
     frame_index = 0
-    is_playing = False
-
+    if debug:
+        is_playing = False
+    else:
+        is_playing = True
+    
     while True:
         if frame_index < len(frame_array):
             cv2.imshow("Video Player", frame_array[frame_index])
