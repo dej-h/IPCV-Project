@@ -3,11 +3,145 @@ import numpy as np
 import json
 import time
 from line_detection import dis_to_line, should_merge, merge_lines, intersection  # Import your provided functions
-
 import itertools
+
 import numpy as np
 
-def get_top_middle_points(points, contours, image, num_points=4, frame_width=1920, frame_height=1080, y_margin=0):
+import numpy as np
+
+def has_lines_on_sides(points, detected_lines, tolerance=5):
+    """Check if each side of the quadrilateral has a corresponding line in detected lines within tolerance.
+       Also, filter out cases where all four edges are aligned with a single detected line.
+    """
+    # Sort points based on x and y coordinates for consistency
+    points = sorted(points, key=lambda pt: (pt[0], pt[1]))
+
+    # Define the four edges of the quadrilateral (ignore diagonals)
+    edges = [
+        (points[0], points[1]),  # Top side
+        (points[1], points[3]),  # Right side
+        (points[3], points[2]),  # Bottom side
+        (points[2], points[0])   # Left side
+    ]
+
+    def distance_point_to_line(point, line_start, line_end):
+        """Calculate the perpendicular distance from a point to a line segment."""
+        px, py = point
+        x1, y1 = line_start
+        x2, y2 = line_end
+        line_len = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+        if line_len == 0:
+            return np.sqrt((px - x1) ** 2 + (py - y1) ** 2)
+        # Projection formula for distance from point to line segment
+        t = max(0, min(1, ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / line_len**2))
+        projection_x = x1 + t * (x2 - x1)
+        projection_y = y1 + t * (y2 - y1)
+        return np.sqrt((px - projection_x) ** 2 + (py - projection_y) ** 2)
+
+    # Check if each edge is close enough to at least one detected line
+    aligned_edges_count = {}
+    for edge in edges:
+        edge_aligned = False
+        for line_index, line in enumerate(detected_lines):
+            line_p1 = line['p1']
+            line_p2 = line['p2']
+
+            # Check distance from both endpoints of the edge to the line
+            dist1 = distance_point_to_line(edge[0], line_p1, line_p2)
+            dist2 = distance_point_to_line(edge[1], line_p1, line_p2)
+
+            # If both endpoints are within the tolerance, the edge is aligned with this line
+            if dist1 < tolerance and dist2 < tolerance:
+                edge_aligned = True
+
+                # Track how many edges align with each detected line
+                if line_index in aligned_edges_count:
+                    aligned_edges_count[line_index] += 1
+                else:
+                    aligned_edges_count[line_index] = 1
+                break
+
+        # If any edge is not aligned with any line, return False
+        if not edge_aligned:
+            return False
+
+    # Check if all four edges are aligned with a single detected line
+    if any(count == 4 for count in aligned_edges_count.values()):
+        # All four edges align with a single detected line, so filter out this quadrilateral
+        return False
+
+    # If all edges are aligned with some line and no single line covers all edges, return True
+    return True
+import numpy as np
+
+def has_lines_on_sides(points, detected_lines, tolerance=5):
+    """Check if each side of the quadrilateral has a corresponding line in detected lines within tolerance.
+       Also, filter out cases where all four edges are aligned with a single detected line.
+    """
+    # Sort points based on x and y coordinates for consistency
+    points = sorted(points, key=lambda pt: (pt[0], pt[1]))
+
+    # Define the four edges of the quadrilateral (ignore diagonals)
+    edges = [
+        (points[0], points[1]),  # Top side
+        (points[1], points[3]),  # Right side
+        (points[3], points[2]),  # Bottom side
+        (points[2], points[0])   # Left side
+    ]
+
+    def distance_point_to_line(point, line_start, line_end):
+        """Calculate the perpendicular distance from a point to a line segment."""
+        px, py = point
+        x1, y1 = line_start
+        x2, y2 = line_end
+        line_len = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+        if line_len == 0:
+            return np.sqrt((px - x1) ** 2 + (py - y1) ** 2)
+        # Projection formula for distance from point to line segment
+        t = max(0, min(1, ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / line_len**2))
+        projection_x = x1 + t * (x2 - x1)
+        projection_y = y1 + t * (y2 - y1)
+        return np.sqrt((px - projection_x) ** 2 + (py - projection_y) ** 2)
+
+    # Check if each edge is close enough to at least one detected line
+    aligned_edges_count = {}
+    for edge in edges:
+        edge_aligned = False
+        for line_index, line in enumerate(detected_lines):
+            line_p1 = line['p1']
+            line_p2 = line['p2']
+
+            # Check distance from both endpoints of the edge to the line
+            dist1 = distance_point_to_line(edge[0], line_p1, line_p2)
+            dist2 = distance_point_to_line(edge[1], line_p1, line_p2)
+
+            # If both endpoints are within the tolerance, the edge is aligned with this line
+            if dist1 < tolerance and dist2 < tolerance:
+                edge_aligned = True
+
+                # Track how many edges align with each detected line
+                if line_index in aligned_edges_count:
+                    aligned_edges_count[line_index] += 1
+                else:
+                    aligned_edges_count[line_index] = 1
+                break
+
+        # If any edge is not aligned with any line, return False
+        if not edge_aligned:
+            return False
+
+    # Check if all four edges are aligned with a single detected line
+    if any(count == 4 for count in aligned_edges_count.values()):
+        # All four edges align with a single detected line, so filter out this quadrilateral
+        return False
+
+    # If all edges are aligned with some line and no single line covers all edges, return True
+    return True
+
+
+
+
+def get_top_middle_points(points, contours, image, lines, num_points=4, frame_width=1920, frame_height=1080, y_margin=0):
     # Select the largest contour (assuming the main object is the largest white region)
     largest_contour = max(contours, key=cv2.contourArea)
 
@@ -69,13 +203,18 @@ def get_top_middle_points(points, contours, image, num_points=4, frame_width=192
 
         return abs(m1 - m2) < 0.1 and abs(m3 - m4) < 0.1
 
+
     # Filter valid groups based on parallel and proportion checks
     valid_angle_groups = [group for group in candidate_groups if isParallel(group)]
     valid_proportion_groups = [group for group in valid_angle_groups if is_quadrilateral(group)]
-    
+    has_lines_on_sides_groups = [group for group in valid_proportion_groups if has_lines_on_sides(group, lines, tolerance=5)]
+    print(f"Number of valid groups: {len(has_lines_on_sides_groups)}")
     # Calculate distances to the highest_point for each valid proportion group
+    if not has_lines_on_sides_groups:
+        return None
+    
     distances = [(group, np.sqrt((center_of_quadrilateral(group)[0] - highest_point[0]) ** 2 + 
-                                 (center_of_quadrilateral(group)[1] - highest_point[1]) ** 2)) for group in valid_proportion_groups]
+                                 (center_of_quadrilateral(group)[1] - highest_point[1]) ** 2)) for group in has_lines_on_sides_groups]
 
     # Sort the groups by distance to find the closest and furthest
     distances.sort(key=lambda x: x[1])
@@ -149,7 +288,7 @@ def load_camera_parameters(json_path):
     return camera_matrix, dist_coeffs
 
 # Input video file (make sure to adjust the path)
-video_path = "clips/clip3.mp4"
+video_path = "clips/clip1.mp4"
 output_video_path = "output_video.mp4"
 json_path = "intrinsic.json"  # Path to your JSON file
 
@@ -263,7 +402,7 @@ while True:
         
         
         # Get top-right 4 points
-        top_right_points = get_top_middle_points(intersection_points, contours, img_resized, num_points=4, frame_width=downsampled_width, frame_height=downsampled_height)
+        top_right_points = get_top_middle_points(intersection_points, contours, img_resized,merged_lines, num_points=4, frame_width=downsampled_width, frame_height=downsampled_height)
 
         # Draw merged lines and all intersection points
         for line in merged_lines:
@@ -271,7 +410,7 @@ while True:
         
         for point in intersection_points:
             color = (255, 0, 0)  # Default color: blue
-            if point in top_right_points:
+            if ( top_right_points != None) and point in top_right_points:
                 color = (0, 255, 0)  # Color top-right points: green
             cv2.circle(lines_img, point, point_radius, color, -1)
         
@@ -350,6 +489,8 @@ while True:
     except Exception as e:
         # Handle any exceptions and still show the combined output
         print(f"Error: {e}")
+        # throw the error higher
+        
         #cv2.imshow('All Steps Combined (Raw and Merged Lines)', combined_output)
 
     ### 13. Wait for user input or move to the next frame
