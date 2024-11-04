@@ -30,14 +30,34 @@ def project_3d_to_2d(point_3d, intrinsic_matrix, extrinsic_matrix):
 # Example usage (replace with your values):
 
 
-def putBanner(image,bannerdegree,K,extrinsic_matrix):
+def putBanner(image,img_points,bannerdegree):
+    K = np.array([
+    [1126.00516, 0.0, 1006.32321],
+    [0.0, 278.159008, 588.130689],
+    [0.0, 0.0, 1.0]
+    ])
+    obj_points = np.array([[0, 0, 0], [0, 12, 0], [6, 12, 0], [6, 0, 0]], dtype=np.float32)
+    
+    dist_coeffs = np.zeros((4, 1))
+    
+    success, rvec, tvec = cv2.solvePnP(obj_points, img_points, K, dist_coeffs)
+
+    if success:
+        # Convert rvec to rotation matrix (optional, for extrinsic matrix)
+        rotation_matrix, _ = cv2.Rodrigues(rvec)
+        print("Extrinsic rvec:\n", rvec)
+        extrinsic_matrix = np.hstack((rotation_matrix, tvec))
+        print("Extrinsic Matrix:\n", extrinsic_matrix)
+    else:
+        print("Error: solvePnP failed to find a solution.")
+
 
     cornersBanner3D=np.array(
         [
-            [-0.8,-16,0],
-            [-0.8-3* math.cos(math.radians(bannerdegree)),-16,3* math.sin(math.radians(bannerdegree))],
-            [-0.6-3* math.cos(math.radians(bannerdegree)),-6,3* math.sin(math.radians(bannerdegree))],
-            [-0.8,-6,0]
+            [0,0,0],
+            [-3* math.cos(math.radians(bannerdegree)),0,3* math.sin(math.radians(bannerdegree))],
+            [0.2-3* math.cos(math.radians(bannerdegree)),6,3* math.sin(math.radians(bannerdegree))],
+            [0,6,0]
         ]
     )
     cornersIn2D=[]
@@ -107,31 +127,17 @@ if __name__ == "__main__":
     print("Selected points:", points)
     #  camera intrinsic matrix 
 
-    K = np.array([
-    [1126.00516, 0.0, 1006.32321],
-    [0.0, 278.159008, 588.130689],
-    [0.0, 0.0, 1.0]
-    ])
+
+    
     # Define known 3D points in object space
-    obj_points = np.array([[6, 12, 0], [6, 32, 0], [18, 44, 0], [18, 0, 0]], dtype=np.float32)
+    obj_points = np.array([[0, 0, 0], [0, 12, 0], [6, 12, 0], [6, 0, 0]], dtype=np.float32)
 
-    # Use selected 2D image points
-    img_points = np.array(points, dtype=np.float32)
-
-    # Define distortion coefficients (if available, otherwise use zeros)
+    
     dist_coeffs = np.zeros((4, 1))
 
     # Estimate the extrinsic parameters (rotation and translation vectors)
-    success, rvec, tvec = cv2.solvePnP(obj_points, img_points, K, dist_coeffs)
-
-    if success:
-        # Convert rvec to rotation matrix (optional, for extrinsic matrix)
-        rotation_matrix, _ = cv2.Rodrigues(rvec)
-        print("Extrinsic rvec:\n", rvec)
-        extrinsic_matrix = np.hstack((rotation_matrix, tvec))
-        print("Extrinsic Matrix:\n", extrinsic_matrix)
-    else:
-        print("Error: solvePnP failed to find a solution.")
+    
+    img_points = np.array(points, dtype=np.float32)
     
 
     
@@ -153,7 +159,7 @@ figBanner, axes = plt.subplots(2, 3, figsize=(15, 8))
 # Write each frame to the video file
 for i in range(7):  # Starts from 0 and goes up to 10
     imagetem=np.copy(image)
-    cornersBanner2D,imagetem=putBanner(imagetem,i*15,K,extrinsic_matrix)
+    cornersBanner2D,imagetem=putBanner(imagetem,img_points,i*15)
     filename = f"banner_{i*15}degree.jpg"
     if i<1:
         cv2.imwrite(filename, imagetem[0:1000,500:-1])
