@@ -3,6 +3,7 @@ import numpy as np
 import imageio
 import math  as math
 from transform import transform
+import matplotlib.pyplot as plt
 # Global points list to store selected points
 points = []  # Initialize global points list
 
@@ -33,10 +34,10 @@ def putBanner(image,bannerdegree,K,extrinsic_matrix):
 
     cornersBanner3D=np.array(
         [
-            [0,0,0],
-            [0,-20* math.cos(math.radians(bannerdegree)),-20* math.sin(math.radians(bannerdegree))],
-            [50,-20* math.cos(math.radians(bannerdegree)),-20* math.sin(math.radians(bannerdegree))],
-            [50,0,0]
+            [-0.8,-16,0],
+            [-0.8-3* math.cos(math.radians(bannerdegree)),-16,3* math.sin(math.radians(bannerdegree))],
+            [-0.6-3* math.cos(math.radians(bannerdegree)),-6,3* math.sin(math.radians(bannerdegree))],
+            [-0.8,-6,0]
         ]
     )
     cornersIn2D=[]
@@ -47,16 +48,15 @@ def putBanner(image,bannerdegree,K,extrinsic_matrix):
         cornersIn2D.append(projected_point)  # Append the point as a tuple or list
         cv2.circle(image, (projected_point[0], projected_point[1]), 5, (255, 0, 0), -1)
         
-    cv2.imshow("corners",image)
-    cv2.waitKey(5000)
+
     # Convert to a numpy array with shape [4, 2]
     cornersIn2D = np.array(cornersIn2D, dtype=int)
     new=transform(banner,image,cornersIn2D)
     cv2.imshow('Banner',new)
-    cv2.waitKey(0)
+    cv2.waitKey(10)
     cv2.imshow("corners",image)
-    cv2.waitKey(5000)
-    return cornersIn2D
+    cv2.waitKey(10)
+    return cornersIn2D,new
     
 
 
@@ -113,7 +113,7 @@ if __name__ == "__main__":
     [0.0, 0.0, 1.0]
     ])
     # Define known 3D points in object space
-    obj_points = np.array([[0, 0, 0], [100, 0, 0], [100, 100, 0], [0, 100, 0]], dtype=np.float32)
+    obj_points = np.array([[6, 12, 0], [6, 32, 0], [18, 44, 0], [18, 0, 0]], dtype=np.float32)
 
     # Use selected 2D image points
     img_points = np.array(points, dtype=np.float32)
@@ -135,39 +135,46 @@ if __name__ == "__main__":
     
 
     
-    cornersBanner2D=putBanner(image,0,K,extrinsic_matrix)
+    #cornersBanner2D=putBanner(image,0,K,extrinsic_matrix)
 
-    
+    # Define video parameters
+output_file = 'putBanner_different_angle.mp4'  # Filename for the output video
+frame_width, frame_height = 1000, 1000  # Set the width and height of the frames
+fps = 1  # Frames per second
+
+# Initialize the VideoWriter object
+fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Codec for MP4
+out = cv2.VideoWriter(output_file, fourcc, fps, (frame_width, frame_height))
+
+# Assume frames is a list of numpy arrays, each representing a frame
+
+figBanner, axes = plt.subplots(2, 3, figsize=(15, 8))
+
+# Write each frame to the video file
+for i in range(7):  # Starts from 0 and goes up to 10
+    imagetem=np.copy(image)
+    cornersBanner2D,imagetem=putBanner(imagetem,i*15,K,extrinsic_matrix)
+    filename = f"banner_{i*15}degree.jpg"
+    if i<1:
+        cv2.imwrite(filename, imagetem[0:1000,500:-1])
+        out.write(imagetem[0:1000,500:-1])
+        imagetem = cv2.cvtColor(imagetem, cv2.COLOR_BGR2RGB)
+        axes[math.floor(i/3), int(i%3)].imshow(imagetem[0:500,700:1300])
+        axes[math.floor(i/3), int(i%3)].set_title(f"{i*15} degree")
+        axes[math.floor(i/3), int(i%3)].axis("off")  # Hide axis
+    elif i>1:
+        cv2.imwrite(filename, imagetem[0:1000,500:-1])
+        out.write(imagetem[0:1000,500:-1])
+        imagetem = cv2.cvtColor(imagetem, cv2.COLOR_BGR2RGB)
+        ii=i-1
+        axes[math.floor(ii/3), int(ii%3)].imshow(imagetem[0:500,700:1300])
+        axes[math.floor(ii/3), int(ii%3)].set_title(f"{i*15} degree")
+        axes[math.floor(ii/3), int(ii%3)].axis("off")  # Hide axis       
+# Release the video writer object
+out.release()
+plt.tight_layout()
+plt.subplots_adjust(wspace=0.1, hspace=0.1)  # Smaller values for tighter fit
+plt.show()
+print("Video saved as", output_file)
         
-    #print(cornersBanner2D)
-    '''
-    # Define a 3D point in world coordinates
-    test_3d_point = (0, 0, 0)  # Replace with actual test point
 
-    # Use the intrinsic matrix and extrinsic matrix calculated earlier
-    projected_2d_point = project_3d_to_2d(test_3d_point, K, extrinsic_matrix)
-    print("Projected 2D point:", projected_2d_point)
-    orthognal_3d_point_45=(0,-70,-70)
-    orthognal_3d_point_30=(0,-100*math.cos(math.radians(30)),-100*math.sin(math.radians(30)))
-    orthognal_3d_point_90=(0,0,-100)
-    orthognal_2d_point_30= project_3d_to_2d(orthognal_3d_point_30, K, extrinsic_matrix)
-    orthognal_2d_point_45= project_3d_to_2d(orthognal_3d_point_45, K, extrinsic_matrix)
-    orthognal_2d_point_90= project_3d_to_2d(orthognal_3d_point_90, K, extrinsic_matrix)
-    print("orthognal_2d_point_30:", orthognal_2d_point_30)
-    print("orthognal_2d_point_45:", orthognal_2d_point_45)
-    print("orthognal_2d_point_90:", orthognal_2d_point_90)
-    color30 = (0, 255, 0)  # Green color
-    thickness = 5
-    color45 = (0, 0, 255)  
-    thickness = 5
-    color90= (255, 0, 0)  
-    thickness = 5
-    # Draw the line
-    
-    cv2.line(image, projected_2d_point, orthognal_2d_point_30, color30, thickness)
-    cv2.line(image, projected_2d_point, orthognal_2d_point_45, color45, thickness)
-    cv2.line(image, projected_2d_point, orthognal_2d_point_90, color90, thickness)
-    cv2.imshow('Orthognal',image)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-    '''
